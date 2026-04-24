@@ -28,9 +28,25 @@ type Transaction struct {
 	GasTipCap uint64
 	Gas       uint64
 	Value     int64
-	Nonce     uint64
+	// ValueWei, if set, supersedes Value. Decimal string of the wei amount.
+	// Use this for values that overflow int64 (> ~9.22e18 wei / 9.2 ETH).
+	ValueWei string
+	Nonce    uint64
 	// eip-2930 values
 	ChainId int64
+}
+
+// txValue returns the tx value as *big.Int. Prefers ValueWei (decimal string)
+// when set, else falls back to Value (int64).
+func (tx *Transaction) txValue() (*big.Int, error) {
+	if tx.ValueWei == "" {
+		return big.NewInt(tx.Value), nil
+	}
+	v, ok := new(big.Int).SetString(tx.ValueWei, 10)
+	if !ok {
+		return nil, fmt.Errorf("invalid ValueWei: %q (expected decimal string)", tx.ValueWei)
+	}
+	return v, nil
 }
 
 type Client struct {
@@ -85,10 +101,15 @@ func (c *Client) GetNonce(address string) (uint64, error) {
 func (c *Client) EstimateGas(tx Transaction) (uint64, error) {
 	to := ethgo.HexToAddress(tx.To)
 
+	value, err := tx.txValue()
+	if err != nil {
+		return 0, err
+	}
+
 	msg := &ethgo.CallMsg{
 		From:     c.w.Address(),
 		To:       &to,
-		Value:    big.NewInt(tx.Value),
+		Value:    value,
 		Data:     tx.Input,
 		GasPrice: tx.GasPrice,
 	}
@@ -116,11 +137,16 @@ func (c *Client) SendTransaction(tx Transaction) (string, error) {
 		tx.GasPrice = 5242880
 	}
 
+	value, err := tx.txValue()
+	if err != nil {
+		return "", err
+	}
+
 	t := &ethgo.Transaction{
 		Type:     ethgo.TransactionLegacy,
 		From:     ethgo.HexToAddress(tx.From),
 		To:       &to,
-		Value:    big.NewInt(tx.Value),
+		Value:    value,
 		Gas:      tx.Gas,
 		GasPrice: tx.GasPrice,
 	}
@@ -145,11 +171,16 @@ func (c *Client) SendRawTransaction(tx Transaction) (string, error) {
 		return "", err
 	}
 
+	value, err := tx.txValue()
+	if err != nil {
+		return "", err
+	}
+
 	t := &ethgo.Transaction{
 		Type:     ethgo.TransactionLegacy,
 		From:     c.w.Address(),
 		To:       &to,
-		Value:    big.NewInt(tx.Value),
+		Value:    value,
 		Gas:      gas,
 		GasPrice: tx.GasPrice,
 		Nonce:    tx.Nonce,
