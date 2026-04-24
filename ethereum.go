@@ -92,6 +92,9 @@ func (c *Client) EstimateGas(tx Transaction) (uint64, error) {
 		Data:     tx.Input,
 		GasPrice: tx.GasPrice,
 	}
+	if tx.Gas > 0 {
+		msg.Gas = new(big.Int).SetUint64(tx.Gas)
+	}
 
 	gas, err := c.client.Eth().EstimateGas(msg)
 	if err != nil {
