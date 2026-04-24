@@ -82,6 +82,17 @@ func (c *Client) GetBalance(address string, blockNumber ethgo.BlockNumber) (uint
 	return b.Uint64(), err
 }
 
+// GetBalanceWei returns the balance as a decimal string (wei). Use this for
+// any account that may hold more than ~18.4 ETH (uint64 max), because
+// GetBalance truncates to the low 64 bits of the real *big.Int value.
+func (c *Client) GetBalanceWei(address string, blockNumber ethgo.BlockNumber) (string, error) {
+	b, err := c.client.Eth().GetBalance(ethgo.HexToAddress(address), blockNumber)
+	if err != nil {
+		return "", err
+	}
+	return b.String(), nil
+}
+
 // BlockNumber returns the current block number.
 func (c *Client) BlockNumber() (uint64, error) {
 	return c.client.Eth().BlockNumber()
